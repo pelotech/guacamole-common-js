@@ -37,9 +37,16 @@ build fails if the bundle's `API_VERSION` is not the pinned tag.
 ## Releasing a new upstream version
 
 Renovate watches Apache's release tags and opens a PR that bumps `UPSTREAM_VERSION` and `version` in `package.json`
-together; CI builds and tests from the new tag. Merging it is the release: every push to `main` whose version has no
-`vX.Y.Z` tag yet is rebuilt from the Apache tag, tested, published to npm with provenance, and tagged. The same works
-for a bump made by hand.
+together; CI builds and tests from the new tag. Merging it starts the release: every push to `main` whose version the
+registry does not know yet is rebuilt from the Apache tag, tested, and staged on npm with provenance. Nothing goes live
+from CI. A maintainer reviews the staged version and approves it with 2FA:
+
+```sh
+npm stage list @pelotech/guacamole-common-js
+npm stage approve <stage-id>
+```
+
+`npm stage reject <stage-id>` drops a staged version instead; the next push to `main` stages it again.
 
 The package version tracks the Apache version. A fix to this packaging alone takes the next patch number, with
 `UPSTREAM_VERSION` left as it was, so the file is the source of truth for what Apache code a version contains. When
@@ -47,8 +54,13 @@ Apache later releases that same number, bump the package to the next patch by ha
 
 ## Publishing needs
 
-The release workflow publishes with the `NPM_TOKEN` repository secret: a granular npm access token allowed to publish
-`@pelotech/*`. Provenance requires the repository to stay public.
+- The repository must be public: npm provenance is refused for private repositories.
+- The workflow stages with the `NPM_TOKEN` repository secret, a granular access token allowed to stage
+  `@pelotech/*`. Staging never asks for 2FA; approving does.
+- Staging needs the package to exist on the registry, so the very first version is published by a maintainer from a
+  checkout: `npm run build && npm test && npm publish`.
+- Once the package exists, the token can go: `npm trust` lets GitHub Actions stage through a trust relationship
+  limited to `--allow-stage-publish`, with no long-lived secret anywhere.
 
 ## Developing
 

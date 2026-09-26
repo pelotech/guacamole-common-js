@@ -1,6 +1,7 @@
 name: Release
 
-# A push to main whose package.json version has no tag yet is built from the Apache tag, published, then tagged: merging an upstream bump PR is a release
+# A push to main whose package.json version the registry does not know yet, published or staged, is built from the
+# Apache tag, tested and staged on npm. A maintainer approves it with `npm stage approve` and 2FA; nothing goes live from here.
 on:
   push:
     branches:
@@ -8,41 +9,42 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 jobs:
-  publish:
+  stage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
           registry-url: https://registry.npmjs.org
-      - id: version
-        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-      - id: released
-        name: Released already when the version's tag exists
+      - id: package
         run: |
-          if git rev-parse -q --verify "refs/tags/${{ steps.version.outputs.tag }}" > /dev/null; then
-            echo "yes=true" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.released.outputs.yes != 'true'
-        run: npm ci
-      - if: steps.released.outputs.yes != 'true'
-        run: npm run build
-      - if: steps.released.outputs.yes != 'true'
-        run: npm test
-      - if: steps.released.outputs.yes != 'true'
-        run: npm publish
+          echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - id: known
+        name: Known to the registry already, published or staged
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - if: steps.released.outputs.yes != 'true'
-        name: Tag the release
+          NAME: ${{ steps.package.outputs.name }}
+          VERSION: ${{ steps.package.outputs.version }}
         run: |
-          git tag "${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
+          if npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          elif npm stage list "$NAME" 2> /dev/null | grep -q "$VERSION"; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.known.outputs.yes != 'true'
+        run: npm ci
+      - if: steps.known.outputs.yes != 'true'
+        run: npm run build
+      - if: steps.known.outputs.yes != 'true'
+        run: npm test
+      - if: steps.known.outputs.yes != 'true'
+        run: npm stage publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
