@@ -78,13 +78,10 @@ await writeFile(
   new URL("guacamole-common-js.js", dist),
   `${body}\nexport default Guacamole;\n${named}\n`,
 );
-// Apache's files end without a newline; the hooks here want one
+// Apache's files end with a blank line or none; the hooks here want exactly one newline
 for (const name of ["LICENSE", "NOTICE"]) {
   const text = await readFile(new URL(name, source), "utf8");
-  await writeFile(
-    new URL(name, root),
-    text.endsWith("\n") ? text : `${text}\n`,
-  );
+  await writeFile(new URL(name, root), `${text.trimEnd()}\n`);
 }
 console.log(
   `Built guacamole-common-js ${upstream}: ${modules.length} modules, ${members.length} exports`,
