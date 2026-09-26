@@ -1,0 +1,52 @@
+{
+  "name": "@pelotech/guacamole-common-js",
+  "version": "1.6.0",
+  "description": "Apache Guacamole's guacamole-common-js, built from the Apache release tag as an ES module with types",
+  "keywords": [
+    "guacamole",
+    "guacamole-common-js",
+    "rdp",
+    "vnc",
+    "ssh"
+  ],
+  "homepage": "https://github.com/pelotech/guacamole-common-js#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pelotech/guacamole-common-js.git"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./dist/guacamole-common-js.js"
+    }
+  },
+  "types": "./index.d.ts",
+  "files": [
+    "dist",
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE",
+    "UPSTREAM_VERSION"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "lint": "prettier --check .",
+    "test": "node --test 'test/*.test.mjs' && tsc --noEmit"
+  },
+  "dependencies": {
+    "@types/guacamole-common-js": "^1.5.5"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.8",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

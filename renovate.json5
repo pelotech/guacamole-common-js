@@ -1,0 +1,44 @@
+{
+  extends: ["config:recommended", "helpers:pinGitHubActionDigests"],
+  minimumReleaseAge: "7 days",
+  rangeStrategy: "bump",
+  dependencyDashboard: true,
+  customManagers: [
+    {
+      // A new Apache release bumps the pin; the release workflow publishes once the PR is merged
+      customType: "regex",
+      managerFilePatterns: ["/^UPSTREAM_VERSION$/"],
+      matchStrings: ["^(?<currentValue>\\d+\\.\\d+\\.\\d+)\\s*$"],
+      datasourceTemplate: "github-tags",
+      depNameTemplate: "apache/guacamole-client",
+      versioningTemplate: "semver",
+    },
+    {
+      // The package version follows the Apache version, so the same PR bumps it
+      customType: "regex",
+      managerFilePatterns: ["/^package\\.json$/"],
+      matchStrings: ['"version": "(?<currentValue>\\d+\\.\\d+\\.\\d+)"'],
+      datasourceTemplate: "github-tags",
+      depNameTemplate: "apache/guacamole-client",
+      versioningTemplate: "semver",
+    },
+  ],
+  packageRules: [
+    {
+      matchManagers: ["github-actions"],
+      automerge: true,
+    },
+    {
+      groupName: "all npm patch dependencies",
+      matchDatasources: ["npm"],
+      matchUpdateTypes: ["patch"],
+      automerge: true,
+    },
+    {
+      // An Apache release is published on merge: a human merges it
+      matchPackageNames: ["apache/guacamole-client"],
+      groupName: "Apache Guacamole",
+      automerge: false,
+    },
+  ],
+}
