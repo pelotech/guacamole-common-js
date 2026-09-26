@@ -1,7 +1,8 @@
 name: Release
 
-# A push to main whose package.json version the registry does not know yet, published or staged, is built from the
-# Apache tag, tested and staged on npm. A maintainer approves it with `npm stage approve` and 2FA; nothing goes live from here.
+# A push to main whose package.json version is not published yet is built from the Apache tag, tested and staged on
+# npm through the trusted publisher binding (OIDC, no token). A maintainer approves it with `npm stage approve` and
+# 2FA; nothing goes live from here.
 on:
   push:
     branches:
@@ -21,30 +22,28 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-          registry-url: https://registry.npmjs.org
       - id: package
+        run: echo "spec=$(node -p "require('./package.json').name + '@' + require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - id: published
+        name: Published already
         run: |
-          echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
-          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-      - id: known
-        name: Known to the registry already, published or staged
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NAME: ${{ steps.package.outputs.name }}
-          VERSION: ${{ steps.package.outputs.version }}
-        run: |
-          if npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
-            echo "yes=true" >> "$GITHUB_OUTPUT"
-          elif npm stage list "$NAME" 2> /dev/null | grep -q "$VERSION"; then
+          if npm view "${{ steps.package.outputs.spec }}" version > /dev/null 2>&1; then
             echo "yes=true" >> "$GITHUB_OUTPUT"
           fi
-      - if: steps.known.outputs.yes != 'true'
+      - if: steps.published.outputs.yes != 'true'
         run: npm ci
-      - if: steps.known.outputs.yes != 'true'
+      - if: steps.published.outputs.yes != 'true'
         run: npm run build
-      - if: steps.known.outputs.yes != 'true'
+      - if: steps.published.outputs.yes != 'true'
         run: npm test
-      - if: steps.known.outputs.yes != 'true'
-        run: npm stage publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - if: steps.published.outputs.yes != 'true'
+        name: Stage on npm, or report the version as staged already and awaiting approval
+        run: |
+          if npm stage publish 2>&1 | tee stage.log; then
+            exit 0
+          fi
+          if grep -qiE "already (exists|staged|published)|EPUBLISHCONFLICT|E409" stage.log; then
+            echo "::notice::${{ steps.package.outputs.spec }} is staged already; approve it with npm stage approve"
+            exit 0
+          fi
+          exit 1

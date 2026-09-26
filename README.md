@@ -55,12 +55,14 @@ Apache later releases that same number, bump the package to the next patch by ha
 ## Publishing needs
 
 - The repository must be public: npm provenance is refused for private repositories.
-- The workflow stages with the `NPM_TOKEN` repository secret, a granular access token allowed to stage
-  `@pelotech/*`. Staging never asks for 2FA; approving does.
-- Staging needs the package to exist on the registry, so the very first version is published by a maintainer from a
-  checkout: `npm run build && npm test && npm publish`.
-- Once the package exists, the token can go: `npm trust` lets GitHub Actions stage through a trust relationship
-  limited to `--allow-stage-publish`, with no long-lived secret anywhere.
+- The workflow authenticates through npm's trusted publisher binding for this repository and workflow file, created
+  with `npm trust github @pelotech/guacamole-common-js --file release.yaml --repository pelotech/guacamole-common-js
+--allow-stage-publish`. No token is stored anywhere; the binding allows staging only, and approving takes a
+  maintainer's 2FA.
+- Staging needs the package to exist on the registry, so the very first version was published by a maintainer from a
+  checkout: `npm run build && npm test && npm publish --provenance=false`.
+- A push to `main` while a version is staged and awaiting approval reports it as staged already and stops; approve
+  or reject it and the next push behaves normally.
 
 ## Developing
 
