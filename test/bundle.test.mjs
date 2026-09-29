@@ -30,3 +30,19 @@ test("names every member of the namespace", () => {
   assert.equal(namespace, Guacamole);
   assert.deepEqual(Object.keys(rest).sort(), Object.keys(Guacamole).sort());
 });
+
+test("declares no binding named like a global, which would shadow it for the whole bundle", async () => {
+  const source = await readFile(
+    new URL("../dist/guacamole-common-js.js", import.meta.url),
+    "utf8",
+  );
+  for (const name of Object.keys(Guacamole).filter(
+    (name) => name in globalThis,
+  )) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`^(?:const|let|var|class|function\\*?)\\s+${name}\\b`, "m"),
+      name,
+    );
+  }
+});

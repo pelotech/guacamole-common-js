@@ -27,10 +27,12 @@ package needs no separate `@types` install.
 
 ## How it is built
 
-`npm run build` downloads the Apache source archive for the tag in `UPSTREAM_VERSION`, concatenates
-`common/license.js` and `modules/*.js` in the order Apache's own build uses, appends a default export and one named
-export per member of the `Guacamole` namespace, and copies Apache's `LICENSE` and `NOTICE` next to the package. The
-build fails if the bundle's `API_VERSION` is not the pinned tag.
+`npm run build` downloads the Apache source archive for the tag in `UPSTREAM_VERSION`, or for the commit in
+`UPSTREAM_COMMIT` when that file exists, concatenates `common/license.js` and `modules/*.js` in the order Apache's own
+build uses, appends a default export and one named export per member of the `Guacamole` namespace, and copies Apache's
+`LICENSE` and `NOTICE` next to the package. Since Apache 1.6.1 the version lives in a template under
+`webapp-templates/modules` that Maven fills in; the build fills `${project.version}` the same way. The build fails if
+the bundle's `API_VERSION` is not the pinned version.
 
 `npm test` loads the bundle and checks the version and the classes, then type-checks a consumer against `index.d.ts`.
 
@@ -51,6 +53,13 @@ npm stage approve <stage-id>
 The package version tracks the Apache version. A fix to this packaging alone takes the next patch number, with
 `UPSTREAM_VERSION` left as it was, so the file is the source of truth for what Apache code a version contains. When
 Apache later releases that same number, bump the package to the next patch by hand.
+
+A prerelease from Apache's staging branch lives on a branch of the same name here (`staging/1.6.1`), so `main` keeps
+the latest release. It pins the Apache commit in `UPSTREAM_COMMIT`, keeps `UPSTREAM_VERSION` at the version Apache
+will release, and takes a prerelease package version such as `1.6.1-alpha.0`. Running the Release workflow on that
+branch (`gh workflow run release.yaml --ref staging/1.6.1`) stages it under the `next` dist-tag; approval is the same.
+Renovate ignores both files in that state. When Apache tags the release, `main` takes the release as usual and the
+branch is deleted.
 
 ## Publishing needs
 

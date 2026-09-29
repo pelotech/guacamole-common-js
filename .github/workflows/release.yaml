@@ -39,7 +39,9 @@ jobs:
       - if: steps.published.outputs.yes != 'true'
         name: Stage on npm, or report the version as staged already and awaiting approval
         run: |
-          if npm stage publish 2>&1 | tee stage.log; then
+          # A prerelease must name its dist-tag, and `next` keeps `latest` on the last release
+          tag=$(node -p "require('./package.json').version.includes('-') ? '--tag next' : ''")
+          if npm stage publish $tag 2>&1 | tee stage.log; then
             exit 0
           fi
           if grep -qiE "already (exists|staged|published)|EPUBLISHCONFLICT|E409" stage.log; then

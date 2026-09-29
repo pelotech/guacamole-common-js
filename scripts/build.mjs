@@ -1,4 +1,4 @@
-// Builds dist/guacamole-common-js.js from the Apache release named in UPSTREAM_VERSION: the same files, in the same
+// Builds dist/guacamole-common-js.js from the Apache source named in UPSTREAM_VERSION: the same files, in the same
 // order, as Apache's own Maven build concatenates, wrapped as an ES module with a default and named exports.
 import { execFileSync } from "node:child_process";
 import { createWriteStream } from "node:fs";
@@ -18,16 +18,22 @@ const root = new URL("../", import.meta.url);
 const upstream = (
   await readFile(new URL("UPSTREAM_VERSION", root), "utf8")
 ).trim();
+// A prerelease pins a commit of Apache's staging branch for that version; a release builds from the tag
+const commit = await readOptional(new URL("UPSTREAM_COMMIT", root));
+const ref = commit ?? upstream;
 const work = new URL(".upstream/", root);
-const archive = new URL(`${upstream}.tar.gz`, work);
-const extracted = `guacamole-client-${upstream}`;
+const archive = new URL(`${ref}.tar.gz`, work);
+const extracted = `guacamole-client-${ref}`;
 const source = new URL(`${extracted}/`, work);
-const webapp = new URL("guacamole-common-js/src/main/webapp/", source);
+const main = new URL("guacamole-common-js/src/main/", source);
+const webapp = new URL("webapp/", main);
 const dist = new URL("dist/", root);
 
 await mkdir(work, { recursive: true });
 if (!(await exists(archive))) {
-  const url = `https://github.com/apache/guacamole-client/archive/refs/tags/${upstream}.tar.gz`;
+  const url = commit
+    ? `https://github.com/apache/guacamole-client/archive/${commit}.tar.gz`
+    : `https://github.com/apache/guacamole-client/archive/refs/tags/${upstream}.tar.gz`;
   console.log(`Downloading ${url}`);
   const response = await fetch(url);
   if (!response.ok || !response.body) {
@@ -44,19 +50,37 @@ execFileSync("tar", [
   fileURLToPath(archive),
   "-C",
   fileURLToPath(work),
-  `${extracted}/guacamole-common-js/src/main/webapp`,
+  `${extracted}/guacamole-common-js/src/main`,
   `${extracted}/LICENSE`,
   `${extracted}/NOTICE`,
 ]);
 
-// Apache's pom lists common/license.js first, then modules/**/*.js
-const modules = (await readdir(new URL("modules/", webapp)))
-  .filter((name) => name.endsWith(".js"))
-  .sort();
-const parts = [await readFile(new URL("common/license.js", webapp), "utf8")];
-for (const name of modules) {
-  parts.push(await readFile(new URL(`modules/${name}`, webapp), "utf8"));
+// Apache's pom lists common/license.js first, then modules/**/*.js; since 1.6.1 Maven fills the version into the
+// templates under webapp-templates/modules and they join the same set
+const modules = new Map();
+for (const name of await jsFiles(new URL("modules/", webapp))) {
+  modules.set(name, await readFile(new URL(`modules/${name}`, webapp), "utf8"));
 }
+const templates = new URL("webapp-templates/modules/", main);
+for (const name of await jsFiles(templates)) {
+  if (modules.has(name)) {
+    throw new Error(`${name} is both a module and a template`);
+  }
+  const filtered = (
+    await readFile(new URL(name, templates), "utf8")
+  ).replaceAll("${project.version}", upstream);
+  if (filtered.includes("${")) {
+    throw new Error(
+      `${name} uses a Maven property this build does not fill in`,
+    );
+  }
+  modules.set(name, filtered);
+}
+const names = [...modules.keys()].sort();
+const parts = [
+  await readFile(new URL("common/license.js", webapp), "utf8"),
+  ...names.map((name) => modules.get(name)),
+];
 const body = parts.join("\n");
 
 // The namespace's members become named exports; the bundle is loaded once to list them
@@ -71,9 +95,12 @@ if (probed.API_VERSION !== upstream) {
   );
 }
 
-const named = members
-  .map((member) => `export const ${member} = Guacamole.${member};`)
-  .join("\n");
+// Exported under their own names through an alias list: a binding named like a global (Object, Event) would shadow
+// it for the whole bundle
+const named = [
+  ...members.map((member) => `const guac_${member} = Guacamole.${member};`),
+  `export { ${members.map((member) => `guac_${member} as ${member}`).join(", ")} };`,
+].join("\n");
 await writeFile(
   new URL("guacamole-common-js.js", dist),
   `${body}\nexport default Guacamole;\n${named}\n`,
@@ -84,7 +111,7 @@ for (const name of ["LICENSE", "NOTICE"]) {
   await writeFile(new URL(name, root), `${text.trimEnd()}\n`);
 }
 console.log(
-  `Built guacamole-common-js ${upstream}: ${modules.length} modules, ${members.length} exports`,
+  `Built guacamole-common-js ${upstream}${commit ? ` from commit ${commit}` : ""}: ${names.length} modules, ${members.length} exports`,
 );
 
 async function exists(url) {
@@ -93,5 +120,28 @@ async function exists(url) {
     return true;
   } catch {
     return false;
+  }
+}
+
+// The .js files of a directory that may not exist: older releases have no templates
+async function jsFiles(dir) {
+  try {
+    return (await readdir(dir)).filter((name) => name.endsWith(".js"));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+}
+
+async function readOptional(url) {
+  try {
+    return (await readFile(url, "utf8")).trim() || undefined;
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
   }
 }
