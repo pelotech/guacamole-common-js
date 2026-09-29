@@ -28,6 +28,7 @@
     "index.d.ts",
     "LICENSE",
     "NOTICE",
+    "UPSTREAM_COMMIT",
     "UPSTREAM_VERSION"
   ],
   "scripts": {
