@@ -39,7 +39,7 @@
     "@types/guacamole-common-js": "^1.5.5"
   },
   "devDependencies": {
-    "prettier": "^3.9.9",
+    "prettier": "^3.9.10",
     "typescript": "^7.0.2"
   },
   "engines": {
